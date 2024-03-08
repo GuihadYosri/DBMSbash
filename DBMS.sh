@@ -230,25 +230,16 @@ drop_table() {
     fi
 }
 
-############################################
-
+###########################################
 insert_into_table() {
-    list_tables
     read -p "Enter table name to insert into: " tablename
     if [ -f "./$tablename" ]; then
-#   Read column names from the first line of the file
-      IFS=: read -r -a columns_names < "$tablename"
-#   Read data types from the second line of the file
-      IFS=: read -r -a columns_datatypes < $(tail -n +2 "$tablename" | head -n 1)
-
-
-        num_columns=${#columns_datatypes[@]}
-      for element in "${columns_names[@]}"; do
-      echo "$element"
-      done
-      for element in "${columns_datatypes[@]}"; do
-      echo "$element"
-      done
+         # Read column names from the first line of the file
+         IFS=: read -r -a columns_names < "$tablename"
+         # Read data types from the second line of the file
+         IFS=: read -r -a columns_datatypes < <(tail -n +2 "$tablename" | head -n 1)
+         num_columns=${#columns_datatypes[@]}
+        
         echo "Enter data for the table $tablename:"
         declare -a data
         
@@ -260,21 +251,23 @@ insert_into_table() {
                 echo "Invalid input. ${columns_names[i]} must be an integer."
                 return
             fi
-            
             # Check if the value is unique for the first column
             if [ "$i" -eq 0 ]; then
-                if grep -q "^$value$" "$tablename"; then
+                # Check if the value already exists in the file for the first column
+                if grep -q "^$value:" "$tablename"; then
                     echo "Value for ${columns_names[i]} must be unique."
                     return
                 fi
             fi
-            
+
+
             # Add the data to the array
             data+=("$value")
         done
         
         # Join the data array elements into a single string
         data_string=$(IFS=:; echo "${data[*]}")
+        data_string+=":"
         # Append the data to the table file
         echo "$data_string" >> "$tablename"
         echo "Data inserted into table $tablename."
@@ -282,6 +275,114 @@ insert_into_table() {
         echo "Table $tablename does not exist."
     fi
 }
+#############################################
+
+select_from_table() {
+    list_tables
+    read -p "Enter table name to select from: " tablename
+    if [ -f "./$tablename" ]; then
+        # Check if the table has only two lines
+        if [ "$(wc -l < "$tablename")" -eq 2 ]; then
+            echo "Table $tablename is empty."
+            return
+        fi
+
+        # Display options for selection
+        echo "Select an option:"
+        echo "1. Select all data from $tablename"
+        echo "2. Select a specific row"
+        echo "3. Select a specific column"
+        read -p "Enter your choice: " choice
+
+        case $choice in
+            1)
+                # Display column names
+                IFS=: read -r -a columns_names < "$tablename"
+                echo "Table ( $tablename ) data:"
+                
+                # Display all data starting from line 3
+                tail -n +3 "$tablename"
+                ;;
+            2)
+                # Provide option to enter column name and value = select by row
+                read -p "Enter the column name to select: " column_name
+                read -p "Enter the value of $column_name to select the row: " column_value
+                # Validate if the specified column exists
+                if grep -q "^$column_name:" "$tablename"; then
+                    grep -i "$column_value" "$tablename" || echo "Row with $column_name = $column_value not found."
+                else
+                    echo "Column $column_name does not exist in $tablename."
+                fi
+                ;;
+            3)
+                read -p "Enter the column name to select: " column_name
+                # Search for the column name in the first line of the file and count the number of occurrences of : before the specified column
+                column_number=$(awk -F: -v col_name="$column_name" 'NR==1 { for(i=1; i<=NF; i++) { if ($i == col_name) { print i } } }' "$tablename")
+                # If the column name is found print the data in the corresponding column from the other lines
+                if [ -n "$column_number" ]; then
+                    # Output the values of the specified column starting from the third line
+                    awk -F: -v col_num="$column_number" 'NR>=3 { print $col_num }' "$tablename"
+                else
+                    echo "Column $column_name not found in $tablename."
+                fi
+                ;;
+            *)
+                echo "Invalid choice."
+                ;;
+        esac
+    else
+        echo "Table $tablename does not exist."
+    fi
+}
+#################################################################################
+delete_from_table() {
+    read -p "Enter table name to delete from: " tablename
+    if [ -f "./$tablename" ]; then
+        # Display data before deletion
+        echo "Data in $tablename before deletion:"
+        cat "$tablename"
+        
+        # Provide options for deletion criteria
+        echo "Select an option:"
+        echo "1. Delete by ID"
+        echo "2. Delete by specific column value"
+        echo "3. Delete all data"
+        read -p "Enter your choice: " choice
+        
+        case $choice in
+            1)
+                # Provide option to enter the ID to delete
+                read -p "Enter the ID to delete: " id_to_delete
+                # Delete the row(s) based on the provided ID
+                sed -i "/^$id_to_delete:/d" "$tablename"
+                echo "Data with ID $id_to_delete deleted from $tablename."
+                ;;
+            2)
+                # Provide option to enter column name and value
+                read -p "Enter the column name to delete by: " column_name
+                read -p "Enter the value of $column_name to delete the row: " column_value
+                # Delete the row(s) based on the provided column value
+                sed -i "/^.*:$column_value:/d" "$tablename"
+                echo "Rows with $column_name = $column_value deleted from $tablename."
+                ;;
+            3)
+                # Delete all data starting from the 3rd line
+                sed -i '3,$d' "$tablename"
+                echo "All data starting from the 3rd line deleted from $tablename."
+                ;;
+            *)
+                echo "Invalid choice."
+                ;;
+        esac
+    else
+        echo "Table $tablename does not exist."
+    fi
+}
+###############################################################################
+
+
+
+
 
 
 main_menu
