@@ -96,19 +96,40 @@ drop_database() {
 database_menu() {
     clear
     PS3="Enter your choice: "
-    options=("Create Table" "List Tables" "Drop Table" "Insert Into Table" "Select From Table" "Delete From Table" "Update Table" "Back to Main Menu")
+    options=("Create Table" "List Tables" "Drop Table" "Insert Into Table" "Select From Table" "Delete From Table" "Update Table" "Back to Main Menu" "Exit")
     select choice in "${options[@]}"
     do
-        case $REPLY in
-            1) create_table ;;
-            2) list_tables ;;
-            3) drop_table ;;
-            4) insert_into_table ;;
-            5) select_from_table ;;
-            6) delete_from_table ;;
-            7) update_table ;;
-            8) main_menu ;;
-            *) echo "Invalid choice. Please enter a valid option." ;;
+        case $choice in
+            "Create Table") 
+               create_table 
+               ;;
+            "List Tables") 
+               list_tables 
+               ;;
+            "Drop Table") 
+               drop_table 
+               ;;
+            "Insert Into Table") 
+               insert_into_table 
+               ;;
+            "Select From Table") 
+               select_from_table
+               ;;
+            "Delete From Table") 
+               delete_from_table 
+               ;;
+            "Update Table") 
+               update_table
+               ;;
+            "Back to Main Menu") 
+               main_menu
+               ;;
+            "Exit")
+                exit
+                ;;
+            *) 
+                echo "Invalid choice. Please enter a valid option."
+                ;;
         esac
     done
 }
@@ -158,13 +179,109 @@ create_table() {
         fields_string=$(IFS=:; echo "${fields[*]}")
         field_types_string=$(IFS=:; echo "${field_types[*]}")
         echo "$fields_string" > "./$tablename"
-        echo "$field_types_string" >> ".$tablename"
+        echo "$field_types_string" >> "./$tablename"
         echo "Table $tablename created successfully."
     else
         echo "Table $tablename already exists."
     fi
 }
 
+###############################################
+
+list_tables() {
+
+    # List all files (tables) in the current directory (database)
+    tables=$(ls -p | grep -v /)  # Exclude directories from the listing
+
+    # Check if there are tables in the database
+    if [ -z "$tables" ]; then
+        echo "No tables found in the database."
+    else
+        echo "List of Tables:"
+        echo "$tables"
+    fi
+}
+
+##############################################
+
+drop_table() {
+    list_tables
+    read -p "Enter table name to drop: " tablename
+
+    # Check if the table exists
+    if [ -f "$tablename" ]; then
+        # Ask for confirmation before deleting the table
+        read -p "Are you sure you want to drop table $tablename? (y/n): " confirmation
+        case $confirmation in
+            [Yy])
+                rm "$tablename"  # Remove the file representing the table
+                echo "Table $tablename dropped successfully."
+                ;;
+            [Nn])
+                echo "Operation canceled. Table $tablename was not dropped."
+                ;;
+            *)
+                echo "Invalid input. Please enter 'y' for yes or 'n' for no. Table $tablename was not dropped."
+                ;;
+        esac
+
+    else
+        echo "Table $tablename does not exist."
+    fi
+}
+
+############################################
+
+insert_into_table() {
+    list_tables
+    read -p "Enter table name to insert into: " tablename
+    if [ -f "./$tablename" ]; then
+#   Read column names from the first line of the file
+      IFS=: read -r -a columns_names < "$tablename"
+#   Read data types from the second line of the file
+      IFS=: read -r -a columns_datatypes < $(tail -n +2 "$tablename" | head -n 1)
+
+
+        num_columns=${#columns_datatypes[@]}
+      for element in "${columns_names[@]}"; do
+      echo "$element"
+      done
+      for element in "${columns_datatypes[@]}"; do
+      echo "$element"
+      done
+        echo "Enter data for the table $tablename:"
+        declare -a data
+        
+        for ((i=0; i<num_columns; i++)); do
+            read -p "Enter value for ${columns_names[i]} (${columns_datatypes[i]}): " value
+            
+            # Validate data type
+            if [[ "${columns_datatypes[i]}" == "int" && ! "$value" =~ ^[0-9]+$ ]]; then
+                echo "Invalid input. ${columns_names[i]} must be an integer."
+                return
+            fi
+            
+            # Check if the value is unique for the first column
+            if [ "$i" -eq 0 ]; then
+                if grep -q "^$value$" "$tablename"; then
+                    echo "Value for ${columns_names[i]} must be unique."
+                    return
+                fi
+            fi
+            
+            # Add the data to the array
+            data+=("$value")
+        done
+        
+        # Join the data array elements into a single string
+        data_string=$(IFS=:; echo "${data[*]}")
+        # Append the data to the table file
+        echo "$data_string" >> "$tablename"
+        echo "Data inserted into table $tablename."
+    else
+        echo "Table $tablename does not exist."
+    fi
+}
 
 
 main_menu
